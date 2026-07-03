@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(
+            name: 'ACTION',
+            choices: ['plan', 'apply', 'destroy'],
+            description: 'Select Terraform action'
+        )
+    }
+
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
     }
@@ -28,26 +36,56 @@ pipeline {
         }
 
         stage('Terraform Validate') {
+            when {
+                expression { params.ACTION != 'destroy' }
+            }
             steps {
                 sh 'terraform validate'
             }
         }
 
         stage('Terraform Plan') {
+            when {
+                expression { params.ACTION == 'plan' || params.ACTION == 'apply' }
+            }
             steps {
                 sh 'terraform plan -out=tfplan'
             }
         }
 
-        stage('Manual Approval') {
+        stage('Manual Approval for Apply') {
+            when {
+                expression { params.ACTION == 'apply' }
+            }
             steps {
                 input message: 'Proceed with terraform apply to create custom-module EKS cluster?'
             }
         }
 
         stage('Terraform Apply') {
+            when {
+                expression { params.ACTION == 'apply' }
+            }
             steps {
                 sh 'terraform apply -auto-approve tfplan'
+            }
+        }
+
+        stage('Manual Approval for Destroy') {
+            when {
+                expression { params.ACTION == 'destroy' }
+            }
+            steps {
+                input message: 'Proceed with terraform destroy to delete custom-module EKS cluster?'
+            }
+        }
+
+        stage('Terraform Destroy') {
+            when {
+                expression { params.ACTION == 'destroy' }
+            }
+            steps {
+                sh 'terraform destroy -auto-approve'
             }
         }
     }
